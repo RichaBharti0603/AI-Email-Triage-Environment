@@ -1,12 +1,12 @@
-# environment_fixed.py (replace your environment.py with this)
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 from typing import Dict, Any, Optional
 import random
+from reward import MultiObjectiveReward
 
 class EmailTriageEnv(gym.Env):
-    """Fixed Email Triage Environment with Correct Rewards"""
+    """Modular Email Triage Environment using external Reward Function"""
     
     def __init__(self, config: Optional[Dict] = None):
         super().__init__()
@@ -15,19 +15,12 @@ class EmailTriageEnv(gym.Env):
         self.config = config or {
             'categories': ['urgent', 'normal', 'spam'],
             'priorities': ['High', 'Medium', 'Low'],
-            'departments': ['Tech', 'HR', 'Sales', 'Billing'],
-            'reward_weights': {
-                'category_correct': 5,
-                'priority_correct': 2,
-                'department_correct': 1,
-                'critical_miss': -10
-            }
+            'departments': ['Tech', 'HR', 'Sales', 'Billing']
         }
         
-        # Action space: Mapping discrete actions if needed for RL
-        # For multi-objective, we usually have a tuple or a combined space
-        # For simplicity, let's keep it discrete matching the category for now
-        self.action_space = spaces.Discrete(3)
+        # Action space: Discrete action space for simple RL (Urgent, Normal, Spam)
+        # But step() prefers a dict for multi-field agents like DistilBART
+        self.action_space = spaces.Discrete(3) 
         
         # Observation space
         self.observation_space = spaces.Dict({
@@ -35,6 +28,9 @@ class EmailTriageEnv(gym.Env):
             'sender': spaces.Text(max_length=100),
             'timestamp': spaces.Text(max_length=50)
         })
+        
+        # Reward Function
+        self.reward_fn = MultiObjectiveReward()
         
         # Internal state
         self.current_email_index = 0
@@ -86,26 +82,6 @@ class EmailTriageEnv(gym.Env):
                 'text': 'EMERGENCY: Database corrupted! Immediate action required!',
                 'sender': 'dba@company.com',
                 'category': 'urgent', 'priority': 'High', 'department': 'Tech'
-            },
-            {
-                'text': 'Inquiry about your latest product features and pricing.',
-                'sender': 'client@random.com',
-                'category': 'normal', 'priority': 'Medium', 'department': 'Sales'
-            },
-            {
-                'text': 'Final notice: Your subscription payment failed.',
-                'sender': 'billing@services.com',
-                'category': 'urgent', 'priority': 'High', 'department': 'Billing'
-            },
-            {
-                'text': 'Employee benefits enrollment starts next week.',
-                'sender': 'benefits@hr.com',
-                'category': 'normal', 'priority': 'Low', 'department': 'HR'
-            },
-            {
-                'text': 'Urgent password reset required for your account.',
-                'sender': 'support@company.com',
-                'category': 'urgent', 'priority': 'High', 'department': 'Tech'
             }
         ]
     
@@ -137,20 +113,10 @@ class EmailTriageEnv(gym.Env):
             return None, 0, True, False, {'error': 'Episode finished'}
         
         current_email = self.email_database[self.current_email_index]
-        reward = 0
         
-        # Calculate Reward
-        if action_dict.get('category') == current_email['category']:
-            reward += self.config['reward_weights']['category_correct']
-        elif current_email['category'] == 'urgent' and action_dict.get('category') != 'urgent':
-            reward += self.config['reward_weights']['critical_miss']
-            
-        if action_dict.get('priority') == current_email['priority']:
-            reward += self.config['reward_weights']['priority_correct']
-            
-        if action_dict.get('department') == current_email['department']:
-            reward += self.config['reward_weights']['department_correct']
-            
+        # Calculate Reward using external modular function
+        reward = self.reward_fn.calculate(action_dict, current_email)
+        
         self.total_reward += reward
         self.current_email_index += 1
         self.done = self.current_email_index >= len(self.email_database)
