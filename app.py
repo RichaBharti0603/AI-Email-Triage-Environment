@@ -11,11 +11,11 @@ def predict(email_text: str) -> Dict[str, str]:
     Categorizes the email into category, priority, and department.
     """
     if not email_text or len(email_text.strip()) == 0:
-        return {"category": "empty", "priority": "empty", "department": "empty"}
+        return {"category": "Normal", "priority": "Low", "department": "HR"}
         
     try:
         prediction = triage_model.predict(email_text)
-        return prediction
+        return prediction.dict() if hasattr(prediction, 'dict') else prediction
     except Exception as e:
         return {"error": str(e)}
 
@@ -25,16 +25,16 @@ def triage_display(text):
     if "error" in result:
         return f"### Error: {result['error']}"
     
-    # Define color mappings for aesthetic badges
+    # Define color mappings for aesthetic badges (matching OpenEnv capitalization)
     colors = {
-        'urgent': '#f44336', 'normal': '#2196f3', 'spam': '#9e9e9e',
+        'Urgent': '#f44336', 'Normal': '#2196f3', 'Spam': '#9e9e9e',
         'High': '#f44336', 'Medium': '#ff9800', 'Low': '#4caf50',
         'Tech': '#673ab7', 'HR': '#e91e63', 'Sales': '#ffeb3b', 'Billing': '#00bcd4'
     }
     
-    cat = result.get('category', 'unknown')
-    pri = result.get('priority', 'unknown')
-    dep = result.get('department', 'unknown')
+    cat = str(result.get('category', 'Normal'))
+    pri = str(result.get('priority', 'Low'))
+    dep = str(result.get('department', 'HR'))
     
     # Premium Triage Card using HTML
     html_card = f"""

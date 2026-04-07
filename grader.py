@@ -37,6 +37,7 @@ class EmailGrader:
             return {'error': 'No predictions to grade'}
         
         fields = ['category', 'priority', 'department']
+        # Convert keys in results to match expected capitalization if needed
         final_metrics = {}
         
         for field in fields:

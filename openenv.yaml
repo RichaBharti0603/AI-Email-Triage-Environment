@@ -1,0 +1,41 @@
+name: email-triage-env
+version: 1.0.0
+
+description: AI-powered email triage RL environment
+
+author: Richa Bharti
+
+tags:
+  - openenv
+  - reinforcement-learning
+  - nlp
+
+observation_space:
+  type: object
+  properties:
+    email_text:
+      type: string
+    previous_action:
+      type: string
+      nullable: true
+
+action_space:
+  type: object
+  properties:
+    category:
+      type: string
+      enum: [Urgent, Normal, Spam]
+    priority:
+      type: string
+      enum: [High, Medium, Low]
+    department:
+      type: string
+      enum: [Tech, HR, Sales, Billing]
+
+reward:
+  type: number
+  minimum: 0.0
+  maximum: 1.0
+
+episode:
+  max_steps: 1
