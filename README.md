@@ -1,53 +1,63 @@
-# OpenEnv Email Triage Project
+# EmailTriageEnv - OpenEnv Hackathon Submission
 
-## Project Description
-A fully compliant OpenEnv environment designed for the OpenEnv Hackathon. This project simulates a professional customer support workflow where an agent must automatically triage incoming emails.
+## Overview
+EmailTriageEnv is a production-grade reinforcement learning environment designed for automated email classification and routing. It complies with the **OpenEnv** specification, providing a standardized interface for agents to interact with customer support workflows.
 
-## Motivation
-Automating email triage is a critical business process that improves response times and ensures customer issues are handled by the right departments. This environment provides a realistic testbed for RL agents to learn multi-objective classification tasks.
+## Environment Specifications
 
-## Observation Space
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| `subject` | string | Email subject line |
-| `body` | string | Full email content |
-| `sender` | string | Sender's email address |
-| `urgency_hint` | string | Reasoning hint about urgency |
-| `intent_hint` | string | Reasoning hint about primary intent |
+### Observation Space
+The observation is a dictionary containing:
+- `subject`: The email subject line.
+- `body`: The full content of the email.
+- `sender`: The sender's email address.
+- `urgency_hint`: AI-generated hint about urgency (difficulty-dependent).
+- `intent_hint`: AI-generated hint about primary intent.
 
-## Action Space
-| Field | Type | Options |
-| :--- | :--- | :--- |
-| `category` | string | Spam, Inquiry, Complaint, Request |
-| `priority` | string | Low, Medium, High, Urgent |
-| `department` | string | Sales, Support, HR, Finance, Tech |
+### Action Space
+The action is a dictionary with three categorical fields:
+- `category`: `[Spam, Inquiry, Complaint, Request]`
+- `priority`: `[Low, Medium, High, Urgent]`
+- `department`: `[Sales, Support, HR, Finance, Tech]`
 
-## Tasks
-1. **Easy**: Clear, direct requests (e.g., password resets).
-2. **Medium**: Emails with professional context requiring reasoning on priority.
-3. **Hard**: High-pressure, multi-intent emails with ambiguous formatting.
+### Reward System
+A dense reward in the range `[0.0, 1.0]` based on:
+- **Category Match**: 0.4
+- **Priority Match**: 0.3
+- **Department Match**: 0.3
 
-## Reward Design
-The environment provides a dense internal reward based on matching the ground truth:
-- Category (0.4)
-- Priority (0.3)
-- Department (0.3)
-Final evaluation is handled by deterministic graders in `graders.py`.
+## Task Difficulties
+1. **Easy**: Clear, single-intent emails with direct keywords.
+2. **Medium**: Ambiguous emails requiring context for urgency and routing.
+3. **Hard**: Multi-intent, noisy emails requiring deep reasoning and priority balancing.
 
-## Setup
-1. Clone the repository.
-2. Install dependencies: `pip install -r requirements.txt`.
-3. Set environment variables if using LLMs: `OPENAI_API_KEY`.
+## Setup & Installation
 
-## Running Evaluation
-Run the strict inference script:
+### Local Setup
+1. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. Run the environment validation:
+   ```bash
+   python environment.py
+   ```
+
+### Running Baseline Inference
 ```bash
 python inference.py
 ```
 
 ## Docker Instructions
-Build and run the container:
+
+### Build the Image
 ```bash
-docker build -t email-triage .
-docker run email-triage
+docker build -t email-triage-env .
 ```
+
+### Run the Container
+```bash
+docker run -e OPENAI_API_KEY=your_key_here email-triage-env
+```
+
+## OpenEnv Compliance
+This project passes `openenv validate` and implements the standard `[START]`, `[STEP]`, `[END]` logging format in `inference.py`.
