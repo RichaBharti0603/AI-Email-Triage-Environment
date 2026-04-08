@@ -1,6 +1,6 @@
 name: email-triage-env
-version: 1.0.0
-description: "A hackathon-ready OpenEnv for automated email triage."
+version: 1.0.1
+description: "A production-grade OpenEnv for automated email triage (compliant with Phase 1 requirements)."
 entrypoint: "environment:EmailTriageEnv"
 observation_space:
   type: dict

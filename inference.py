@@ -5,64 +5,64 @@ from typing import Dict, Any, List
 from environment import EmailTriageEnv, Action
 from graders import grade_task
 
-# Heuristic Agent Logic (Fallback if OpenAI Key not provided or for baseline testing)
-def diagnostic_heuristic(observation: Dict[str, Any]) -> Action:
+# Diagnostic Heuristic Agent (Phase 1 Baseline)
+def policy(observation: Dict[str, Any]) -> Action:
     body = observation.get("body", "").lower()
-    subject = observation.get("subject", "").lower()
     
-    # Default
+    # Defaults
     category = "Inquiry"
     priority = "Medium"
     department = "Support"
     
-    # Keyword analysis
-    if any(k in body for k in ["refund", "invoice", "price", "billing", "cost", "payment"]):
+    # Decision logic based on keywords
+    if any(k in body for k in ["refund", "invoice", "billing", "cost", "payment"]):
         department = "Finance"
-    elif any(k in body for k in ["error", "reset", "bug", "technical", "tech", "download", "login"]):
+    elif any(k in body for k in ["error", "reset", "bug", "tech", "login"]):
         department = "Tech"
-    elif any(k in body for k in ["buy", "order", "enterprise", "sales", "purchase", "demo"]):
+    elif any(k in body for k in ["buy", "order", "sales", "demo"]):
         department = "Sales"
-    elif any(k in body for k in ["hiring", "job", "career", "resume", "interview"]):
-        department = "HR"
         
-    if any(k in body for k in ["urgent", "immediately", "asap", "emergency", "broken"]):
+    if any(k in body for k in ["urgent", "immediately", "asap", "emergency"]):
         priority = "Urgent"
-    elif any(k in body for k in ["feature request", "suggestion"]):
+    elif any(k in body for k in ["suggestion", "maybe later"]):
         priority = "Low"
         
-    if any(k in body for k in ["cancel", "un happy", "disappoint", "frustrated", "worst"]):
+    if any(k in body for k in ["cancel", "disappoint", "worst", "unhappy"]):
         category = "Complaint"
-    elif any(k in body for k in ["spam", "winner", "free", "lottery", "prize", "congratulations"]):
+    elif any(k in body for k in ["spam", "winner", "free", "prize"]):
         category = "Spam"
         priority = "Low"
         
     return Action(category=category, priority=priority, department=department)
 
-def run_evaluation(difficulty: str, num_episodes: int = 1):
+def run_evaluation(difficulty: str, episodes: int = 1):
     env = EmailTriageEnv(target_difficulty=difficulty)
     
+    # Strict OpenEnv Logging: [START]
     print(f"[START]")
     print(f"Task: {difficulty}")
     
     total_score = 0.0
     total_steps = 0
     
-    for ep in range(1, num_episodes + 1):
+    for ep in range(1, episodes + 1):
+        # Reset before every episode
         obs, info = env.reset()
         terminated = False
         truncated = False
         
         while not (terminated or truncated):
-            # Run heuristic agent
-            action = diagnostic_heuristic(obs)
+            # Agent selects action
+            action = policy(obs)
             
             # Step environment
             next_obs, reward, terminated, truncated, info = env.step(action)
             
-            # Official Grade
+            # Grade step
             gt = info.get("ground_truth")
             score = grade_task(action.dict(), gt, difficulty) if gt else 0.0
             
+            # Strict OpenEnv Logging: [STEP]
             print(f"[STEP]")
             print(f"Episode: {ep}")
             print(f"Action: {json.dumps(action.dict())}")
@@ -73,16 +73,16 @@ def run_evaluation(difficulty: str, num_episodes: int = 1):
             total_steps += 1
             obs = next_obs
 
+    # Strict OpenEnv Logging: [END]
     avg_score = total_score / total_steps if total_steps > 0 else 0.0
-    
     print(f"[END]")
     print(f"Average_Score: {round(avg_score, 2)}")
-    print(f"Success_Rate: {1.0 if avg_score > 0.7 else 0.0}")
+    print(f"Success_Rate: {1.0 if avg_score >= 0.7 else 0.0}")
     print("-" * 20)
 
 if __name__ == "__main__":
-    tasks = ["easy", "medium", "hard"]
-    for task in tasks:
+    # Run all tasks for a comprehensive verification
+    for task in ["easy", "medium", "hard"]:
         try:
             run_evaluation(task)
         except Exception as e:
