@@ -127,7 +127,7 @@ class EmailTriageEnv(gym.Env):
             action_dict = action
 
         # 2. Process Step
-        reward = self.reward_fn.calculate(action_dict, self.current_email)
+        reward, reward_breakdown = self.reward_fn.calculate(action_dict, self.current_email)
         self.steps += 1
         done = True # Enforce single-step
         
@@ -142,6 +142,7 @@ class EmailTriageEnv(gym.Env):
             },
             'predicted': action_dict,
             'reward': reward,
+            'reward_breakdown': reward_breakdown,
             'is_correct': str(action_dict.get('category')).lower() == str(self.current_email['category']).lower()
         }
         
