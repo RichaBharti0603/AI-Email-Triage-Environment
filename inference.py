@@ -45,7 +45,7 @@ def run_evaluation(difficulty: str, episodes: int):
     
     for ep in range(1, episodes + 1):
         # Reset with deterministic seed for reproducibility
-        obs, info = env.reset(seed=42 + ep)
+        obs, info = env.reset(seed=42)
         terminated = False
         truncated = False
         

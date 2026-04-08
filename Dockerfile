@@ -14,5 +14,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy all project files to root of /app
 COPY . .
 
-# Launch inference automatically with default flags
-CMD ["python", "inference.py", "--difficulty", "easy", "--episodes", "1"]
+# Expose the API port
+EXPOSE 7860
+
+# Launch FastAPI server
+CMD ["uvicorn", "fastapi_app:app", "--host", "0.0.0.0", "--port", "7860"]
