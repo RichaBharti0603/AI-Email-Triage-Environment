@@ -1,0 +1,24 @@
+[
+  {
+    "id": "h1",
+    "subject": "URGENT ISSUE",
+    "body": "I cannot access my billing portal, and my marketing campaign is going live in 1 hour. Fix this or I cancel. Also, I need to know the price for upgrading to enterprise.",
+    "sender": "high_value_customer@vip.com",
+    "ground_truth": {
+      "category": "Complaint",
+      "priority": "Urgent",
+      "department": "Finance"
+    }
+  },
+  {
+    "id": "h2",
+    "subject": "Spam or Inquiry?",
+    "body": "Your service is great but I got a weird email from support@triagemaster.co. Is this you? Also, do you guys have a referral program or discount code?",
+    "sender": "confused_user@yahoo.net",
+    "ground_truth": {
+      "category": "Inquiry",
+      "priority": "Low",
+      "department": "Support"
+    }
+  }
+]

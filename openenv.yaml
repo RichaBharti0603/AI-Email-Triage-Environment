@@ -1,36 +1,22 @@
 name: email-triage-env
 version: 1.0.0
-description: Real-world email triage RL environment for multi-objective classification.
-author: AI Triage Team
-license: MIT
-
+description: A production-grade email triage environment for customer support workflows.
+entrypoint: environment.EmailTriageEnv
 observation_space:
-  email_text: 
-    type: string
-    description: Raw content of the email.
-  previous_action: 
-    type: string
-    description: The category assigned to the previous email (or "None").
-
+  subject: string
+  body: string
+  sender: string
+  urgency_hint: string
+  intent_hint: string
 action_space:
-  category: 
-    type: string
-    description: Classification (Spam, Inquiry, Complaint, Request).
-  priority: 
-    type: string
-    description: Priority level (Low, Medium, High, Urgent).
-  department: 
-    type: string
-    description: Target department (Sales, Support, HR, Finance, Tech).
-
+  category: string
+  priority: string
+  department: string
 reward_range: [0.0, 1.0]
-
 tasks:
   - id: easy
-    description: Direct emails with minimal ambiguity.
+    description: Clear, single-intent emails.
   - id: medium
-    description: Emails requiring basic reasoning and intent detection.
+    description: Ambiguous emails requiring multi-field reasoning.
   - id: hard
-    description: Noisy, multi-intent, or deceptive (spam-like) emails.
-
-env_class: environment.EmailTriageEnv
+    description: Multi-intent, noisy emails requiring deep reasoning.

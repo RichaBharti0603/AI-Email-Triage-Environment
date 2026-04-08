@@ -1,140 +1,96 @@
 import json
-import logging
-from typing import Dict, Any, Optional, Union, List
+import os
+from typing import Dict, Any, Optional, List
+from pydantic import BaseModel, Field
 
-import gymnasium as gym
-from gymnasium import spaces
+# OpenEnv Spec Models
+class Observation(BaseModel):
+    subject: str = Field(..., description="Subject of the email")
+    body: str = Field(..., description="Body of the email")
+    sender: str = Field(..., description="Sender of the email")
+    urgency_hint: str = Field(..., description="A hint about the email urgency based on body analysis")
+    intent_hint: str = Field(..., description="A hint about the email intent based on body analysis")
 
-from reward import MultiObjectiveReward
-from schemas import Category, Priority, Department, EmailObservation, TriageAction
+class Action(BaseModel):
+    category: str = Field(..., description="Spam, Inquiry, Complaint, Request")
+    priority: str = Field(..., description="Low, Medium, High, Urgent")
+    department: str = Field(..., description="Sales, Support, HR, Finance, Tech")
 
-# Configure Logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger("EmailTriageEnv")
+class Reward(BaseModel):
+    value: float = Field(..., ge=0.0, le=1.0)
+    breakdown: Dict[str, float]
 
-class EmailTriageEnv(gym.Env):
+class EmailTriageEnv:
     """
-    OpenEnv-compliant Email Triage Environment.
-    Supports Easy, Medium, and Hard task difficulties.
+    OpenEnv Compliant Email Triage Environment.
     """
-    
-    def __init__(self, config: Optional[Dict] = None):
-        super().__init__()
-        self.spec_name = "email-triage-env"
-        self.spec_version = "1.0.0"
-        
-        self.config = config or {}
-        self.max_steps = self.config.get('max_steps', 5)
-        self.task_difficulty = self.config.get('difficulty', 'medium').lower()
-        
-        self.action_space = spaces.Dict({
-            'category': spaces.Discrete(len(Category)),
-            'priority': spaces.Discrete(len(Priority)),
-            'department': spaces.Discrete(len(Department))
-        })
-        
-        self.observation_space = spaces.Dict({
-            'email_text': spaces.Text(max_length=1000),
-            'previous_action': spaces.Text(max_length=50)
-        })
-        
-        self.reward_fn = MultiObjectiveReward()
-        self.email_database = self._get_full_dataset()
-        self.active_emails = self._filter_dataset()
-        
-        self.current_email = None
-        self.previous_action = "None"
-        self.steps = 0
-        self.episode_reward = 0.0
+    def __init__(self, difficulty: str = "easy"):
+        self.difficulty = difficulty
+        self.dataset_path = f"datasets/{difficulty}.json"
+        self.dataset = self._load_dataset()
+        self.current_idx = 0
+        self.steps_taken = 0
+        self.max_steps = len(self.dataset)
 
-    def _get_full_dataset(self) -> List[Dict[str, str]]:
-        """Complete dataset categorized by difficulty."""
-        return [
-            # EASY: Clear, single intent
-            {'text': 'I want to buy 100 units of your pro plan.', 'category': 'Inquiry', 'priority': 'Medium', 'department': 'Sales', 'difficulty': 'easy'},
-            {'text': 'My server is down! Help me fix it!', 'category': 'Request', 'priority': 'Urgent', 'department': 'Tech', 'difficulty': 'easy'},
-            
-            # MEDIUM: Slightly ambiguous
-            {'text': 'I am unhappy with the service last week and want a refund.', 'category': 'Complaint', 'priority': 'High', 'department': 'Support', 'difficulty': 'medium'},
-            {'text': 'How do I change my billing address in the HR portal?', 'category': 'Inquiry', 'priority': 'Medium', 'department': 'Finance', 'difficulty': 'medium'},
-            
-            # HARD: Noisy, multi-intent, or deceptive
-            {'text': 'Subject: WINNER! You have been selected for a free cruise. Please verify your billing details at our finance office.', 'category': 'Spam', 'priority': 'Low', 'department': 'Finance', 'difficulty': 'hard'},
-            {'text': 'RE: Invoice #001 - The tech support was great, but the billing department is overcharging me for the sales consultation.', 'category': 'Complaint', 'priority': 'Medium', 'department': 'Finance', 'difficulty': 'hard'}
-        ]
+    def _load_dataset(self) -> List[Dict[str, Any]]:
+        if not os.path.exists(self.dataset_path):
+            return []
+        with open(self.dataset_path, "r") as f:
+            return json.load(f)
 
-    def _filter_dataset(self) -> List[Dict[str, str]]:
-        """Filter data based on current task difficulty."""
-        filtered = [e for e in self.email_database if e['difficulty'] == self.task_difficulty]
-        if not filtered:
-            logger.warning(f"No emails found for difficulty '{self.task_difficulty}', using full dataset.")
-            return self.email_database
-        return filtered
+    def reset(self) -> Observation:
+        self.current_idx = 0
+        self.steps_taken = 0
+        return self._get_obs()
 
-    def load_dataset(self, path: str):
-        """Dynamic dataset loading from external file."""
-        try:
-            with open(path, 'r') as f:
-                data = json.load(f)
-                self.email_database = data
-                self.active_emails = self._filter_dataset()
-            logger.info(f"Loaded {len(data)} emails from {path}")
-        except Exception as e:
-            logger.error(f"Dataset load failed: {e}")
-
-    def reset(self, seed: Optional[int] = None, options: Optional[Dict] = None):
-        super().reset(seed=seed)
-        idx = self.np_random.integers(0, len(self.active_emails))
-        self.current_email = self.active_emails[idx]
-        self.steps = 0
-        self.previous_action = "None"
-        self.episode_reward = 0.0
-        return self._get_observation(), self.state()
+    def _get_obs(self) -> Observation:
+        if self.current_idx >= len(self.dataset):
+            return Observation(subject="", body="", sender="", urgency_hint="", intent_hint="")
+        
+        email = self.dataset[self.current_idx]
+        return Observation(
+            subject=email["subject"],
+            body=email["body"],
+            sender=email["sender"],
+            urgency_hint="Analysis pending..." if self.difficulty != "easy" else "Clear",
+            intent_hint="Primary intent detection..."
+        )
 
     def state(self) -> Dict[str, Any]:
         return {
-            "email_text": self.current_email['text'] if self.current_email else "",
-            "previous_action": self.previous_action,
-            "current_step": self.steps,
-            "difficulty": self.task_difficulty
+            "current_idx": self.current_idx,
+            "steps_taken": self.steps_taken,
+            "difficulty": self.difficulty,
+            "ground_truth": self.dataset[self.current_idx]["ground_truth"] if self.current_idx < len(self.dataset) else None
         }
 
-    def _get_observation(self) -> Dict[str, str]:
-        return EmailObservation(
-            email_text=self.current_email['text'] if self.current_email else "",
-            previous_action=self.previous_action
-        ).dict()
+    def step(self, action: Action) -> tuple[Observation, Reward, bool, Dict[str, Any]]:
+        if self.current_idx >= len(self.dataset):
+            return self._get_obs(), Reward(value=0.0, breakdown={}), True, {}
 
-    def step(self, action_input: Union[Dict, str, TriageAction]):
-        format_penalty = 0.0
-        if isinstance(action_input, str):
-            action_dict, format_penalty = self.reward_fn.parse_and_normalize(action_input)
-        elif isinstance(action_input, dict):
-            action_dict = action_input
-        else:
-            action_dict = {}
-            format_penalty = -0.5
+        gt = self.dataset[self.current_idx]["ground_truth"]
+        
+        # Internal dense reward (for training feedback)
+        score = 0.0
+        breakdown = {}
+        
+        if action.category == gt["category"]:
+            score += 0.4
+            breakdown["category"] = 0.4
+        if action.priority == gt["priority"]:
+            score += 0.3
+            breakdown["priority"] = 0.3
+        if action.department == gt["department"]:
+            score += 0.3
+            breakdown["department"] = 0.3
 
-        # Check validity manually vs config if needed
-        reward, breakdown = self.reward_fn.calculate(action_dict, self.current_email, format_penalty=format_penalty)
+        reward = Reward(value=score, breakdown=breakdown)
         
-        gt_copy = self.current_email.copy()
-        self.steps += 1
-        self.previous_action = str(action_dict.get('category', 'None'))
-        self.episode_reward += reward
-        terminated = self.steps >= self.max_steps
+        self.current_idx += 1
+        self.steps_taken += 1
+        done = self.steps_taken >= self.max_steps
         
-        if not terminated:
-            idx = self.np_random.integers(0, len(self.active_emails))
-            self.current_email = self.active_emails[idx]
+        obs = self._get_obs()
+        info = {"ground_truth": gt}
         
-        info = {
-            'ground_truth': gt_copy,
-            'predicted': action_dict,
-            'reward_breakdown': breakdown,
-            'step': self.steps,
-            'difficulty': self.task_difficulty,
-            'env_spec': f"{self.spec_name}-v{self.spec_version}"
-        }
-        
-        return self._get_observation(), reward, terminated, False, info
+        return obs, reward, done, info

@@ -1,0 +1,24 @@
+[
+  {
+    "id": "e1",
+    "subject": "Missing password",
+    "body": "Hi, I lost my password. Can you sent a reset link?",
+    "sender": "user1@gmail.com",
+    "ground_truth": {
+      "category": "Inquiry",
+      "priority": "Medium",
+      "department": "Tech"
+    }
+  },
+  {
+    "id": "e2",
+    "subject": "Question about pricing",
+    "body": "I saw your website. How much is the basic plan?",
+    "sender": "prospect@outlook.com",
+    "ground_truth": {
+      "category": "Inquiry",
+      "priority": "Low",
+      "department": "Sales"
+    }
+  }
+]

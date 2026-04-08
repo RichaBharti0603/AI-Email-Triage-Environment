@@ -1,51 +1,53 @@
-# AI Email Triage Environment (OpenEnv)
+# OpenEnv Email Triage Project
 
-A production-grade, Gymnasium-compatible reinforcement learning environment for automated email triage.
+## Project Description
+A fully compliant OpenEnv environment designed for the OpenEnv Hackathon. This project simulates a professional customer support workflow where an agent must automatically triage incoming emails.
 
-## 🚀 Overview
+## Motivation
+Automating email triage is a critical business process that improves response times and ensures customer issues are handled by the right departments. This environment provides a realistic testbed for RL agents to learn multi-objective classification tasks.
 
-The **EmailTriageEnv** simulates a real-world inbox session where an agent must classify incoming emails by **Category**, **Priority**, and **Department**.
+## Observation Space
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `subject` | string | Email subject line |
+| `body` | string | Full email content |
+| `sender` | string | Sender's email address |
+| `urgency_hint` | string | Reasoning hint about urgency |
+| `intent_hint` | string | Reasoning hint about primary intent |
 
-- **Compliance**: OpenEnv 1.0.0, Gymnasium 0.29.0
-- **Action Space**: Multi-objective (Dict)
-- **Observation Space**: Email content and previous context.
+## Action Space
+| Field | Type | Options |
+| :--- | :--- | :--- |
+| `category` | string | Spam, Inquiry, Complaint, Request |
+| `priority` | string | Low, Medium, High, Urgent |
+| `department` | string | Sales, Support, HR, Finance, Tech |
 
-## 🛠 Action Space
-| Field | Values |
-| :--- | :--- |
-| **Category** | Spam, Inquiry, Complaint, Request |
-| **Priority** | Low, Medium, High, Urgent |
-| **Department** | Sales, Support, HR, Finance, Tech |
+## Tasks
+1. **Easy**: Clear, direct requests (e.g., password resets).
+2. **Medium**: Emails with professional context requiring reasoning on priority.
+3. **Hard**: High-pressure, multi-intent emails with ambiguous formatting.
 
-## 🎓 Task Difficulties
-1. **Easy**: Clear, single-intent emails. Evaluation focuses on Category/Priority.
-2. **Medium**: Ambiguous emails. Evaluation is balanced across all fields.
-3. **Hard**: Noisy, multi-intent, or deceptive emails. Evaluation prioritizes correct routing (Department).
+## Reward Design
+The environment provides a dense internal reward based on matching the ground truth:
+- Category (0.4)
+- Priority (0.3)
+- Department (0.3)
+Final evaluation is handled by deterministic graders in `graders.py`.
 
-## 📊 Evaluation Logic
-The environment uses a multi-objective reward function normalized to `[0.0, 1.0]`. Partial correctness is supported via the `graders.py` module.
+## Setup
+1. Clone the repository.
+2. Install dependencies: `pip install -r requirements.txt`.
+3. Set environment variables if using LLMs: `OPENAI_API_KEY`.
 
-## 🏃 Quick Start
-
-### Local Runs
+## Running Evaluation
+Run the strict inference script:
 ```bash
-# Run baseline evaluation
-python run_baseline.py --difficulty easy --episodes 20
+python inference.py
 ```
 
-### Docker Deployment
+## Docker Instructions
+Build and run the container:
 ```bash
 docker build -t email-triage .
 docker run email-triage
 ```
-
-### Hugging Face Spaces
-This project is pre-configured for Hugging Face Spaces. Simply upload the files and ensure `requirements.txt` is present.
-
-## 🧠 Training an Agent
-```python
-from environment import EmailTriageEnv
-env = EmailTriageEnv(config={'difficulty': 'medium', 'max_steps': 5})
-obs, info = env.reset()
-```
-Use standard RL libraries like Stable Baselines3 or RLlib to train on this environment.

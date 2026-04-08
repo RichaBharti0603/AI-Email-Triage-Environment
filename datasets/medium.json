@@ -1,0 +1,24 @@
+[
+  {
+    "id": "m1",
+    "subject": "System error",
+    "body": "I'm getting a 500 error on the checkout page. This is urgent as we are losing customers.",
+    "sender": "client@business.co",
+    "ground_truth": {
+      "category": "Complaint",
+      "priority": "Urgent",
+      "department": "Tech"
+    }
+  },
+  {
+    "id": "m2",
+    "subject": "Meeting request",
+    "body": "Hi, I'd like to discuss the invoice #123. There is a mismatch in the quantities.",
+    "sender": "partner@corp.com",
+    "ground_truth": {
+      "category": "Inquiry",
+      "priority": "Medium",
+      "department": "Finance"
+    }
+  }
+]
