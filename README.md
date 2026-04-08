@@ -1,63 +1,50 @@
-# EmailTriageEnv - OpenEnv Hackathon Submission
+# EmailTriageEnv - OpenEnv Phase 1 Submission
 
 ## Overview
-EmailTriageEnv is a production-grade reinforcement learning environment designed for automated email classification and routing. It complies with the **OpenEnv** specification, providing a standardized interface for agents to interact with customer support workflows.
+EmailTriageEnv is a production-grade reinforcement learning environment for automated email classification. This version is fully compliant with the **OpenEnv Phase 1** requirements, featuring deterministic seeding via Gymnasium and robust error handling for invalid actions.
 
 ## Environment Specifications
 
 ### Observation Space
-The observation is a dictionary containing:
-- `subject`: The email subject line.
-- `body`: The full content of the email.
-- `sender`: The sender's email address.
-- `urgency_hint`: AI-generated hint about urgency (difficulty-dependent).
-- `intent_hint`: AI-generated hint about primary intent.
+A dictionary containing:
+- `subject`: Email subject line.
+- `body`: Full email content.
+- `sender`: Sender's address.
+- `urgency_hint`: Context-aware priority hint.
+- `intent_hint`: Context-aware intent hint.
 
 ### Action Space
-The action is a dictionary with three categorical fields:
+A dictionary with categorical labels:
 - `category`: `[Spam, Inquiry, Complaint, Request]`
 - `priority`: `[Low, Medium, High, Urgent]`
 - `department`: `[Sales, Support, HR, Finance, Tech]`
 
-### Reward System
-A dense reward in the range `[0.0, 1.0]` based on:
-- **Category Match**: 0.4
-- **Priority Match**: 0.3
-- **Department Match**: 0.3
+### Reward & Grading
+- **Accuracy Score**: Weighted average of Category (0.4), Priority (0.3), and Department (0.3).
+- **Penalty Logic**: A penalty of `-0.1` is applied for malformed actions, and `-0.05` for out-of-bounds categorical values.
+- **Gymnasium Standard**: Uses `self.np_random` for reproducible `reset` and `step` transitions.
 
-## Task Difficulties
-1. **Easy**: Clear, single-intent emails with direct keywords.
-2. **Medium**: Ambiguous emails requiring context for urgency and routing.
-3. **Hard**: Multi-intent, noisy emails requiring deep reasoning and priority balancing.
+## Phase 1 Compliance
+This project incorporates:
+1. **Deterministic Seeding**: `env.reset(seed=42)` guarantees identical initial states.
+2. **Unified Grading**: Centralized `graders.py` with `grade_easy`, `grade_medium`, and `grade_hard`.
+3. **Strict Logging**: `inference.py` outputs clear `[START]`, `[STEP]`, and `[END]` markers.
 
-## Setup & Installation
+## Setup & Baseline
 
-### Local Setup
-1. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-2. Run the environment validation:
-   ```bash
-   python environment.py
-   ```
+### Install
+```bash
+pip install -r requirements.txt
+```
 
-### Running Baseline Inference
+### Run Baseline
 ```bash
 python inference.py
 ```
+Expected Baseline Score (Heuristic): **~0.7 - 0.9** (Task dependent).
 
-## Docker Instructions
-
-### Build the Image
+### Docker
 ```bash
-docker build -t email-triage-env .
+docker build -t openenv-email-triage .
+docker run openenv-email-triage
 ```
-
-### Run the Container
-```bash
-docker run -e OPENAI_API_KEY=your_key_here email-triage-env
-```
-
-## OpenEnv Compliance
-This project passes `openenv validate` and implements the standard `[START]`, `[STEP]`, `[END]` logging format in `inference.py`.

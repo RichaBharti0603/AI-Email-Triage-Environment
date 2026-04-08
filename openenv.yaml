@@ -1,6 +1,6 @@
 name: email-triage-env
-version: 1.0.1
-description: "A production-grade OpenEnv for automated email triage (compliant with Phase 1 requirements)."
+version: 1.0.2
+description: "A production-grade OpenEnv Email Triage Environment with Gymnasium support."
 entrypoint: "environment:EmailTriageEnv"
 observation_space:
   type: dict

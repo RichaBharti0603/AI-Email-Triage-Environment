@@ -1,11 +1,8 @@
 from typing import Dict, Any
 
-def normalize(val: Any) -> str:
-    return str(val).strip().lower()
-
 def grade_task(prediction: Dict[str, Any], ground_truth: Dict[str, Any], difficulty: str = "easy") -> float:
     """
-    Unified grading interface for all tasks.
+    Unified grading logic for Email Triage tasks.
     Weights: Category (0.4), Priority (0.3), Department (0.3)
     """
     if not prediction or not ground_truth:
@@ -13,16 +10,18 @@ def grade_task(prediction: Dict[str, Any], ground_truth: Dict[str, Any], difficu
     
     score = 0.0
     
-    # Category (0.4)
-    if normalize(prediction.get("category")) == normalize(ground_truth.get("category")):
+    def norm(v): return str(v).strip().lower()
+
+    # Category matching
+    if norm(prediction.get("category")) == norm(ground_truth.get("category")):
         score += 0.4
     
-    # Priority (0.3)
-    if normalize(prediction.get("priority")) == normalize(ground_truth.get("priority")):
+    # Priority matching
+    if norm(prediction.get("priority")) == norm(ground_truth.get("priority")):
         score += 0.3
         
-    # Department (0.3)
-    if normalize(prediction.get("department")) == normalize(ground_truth.get("department")):
+    # Department matching
+    if norm(prediction.get("department")) == norm(ground_truth.get("department")):
         score += 0.3
         
     return round(score, 2)
