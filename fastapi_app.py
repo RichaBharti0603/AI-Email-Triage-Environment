@@ -1,46 +1,45 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import FastAPI, HTTPException, Body
 from typing import Dict, Any, Optional
 import uvicorn
 import json
-from environment import EmailTriageEnv, Observation, Action
+from environment import EmailTriageEnv
 
 app = FastAPI(title="OpenEnv Email Triage API")
 
 # Singleton environment instance
-# In a real production scenario, you might want to handle multiple sessions
 env = EmailTriageEnv(target_difficulty="easy")
 
-class ResetRequest(BaseModel):
-    seed: Optional[int] = Field(None, description="Random seed for reproducibility")
+@app.get("/")
+async def root():
+    """Root health check for validator probes."""
+    return {"status": "ok", "env": "EmailTriageEnv"}
 
-class StepRequest(BaseModel):
-    action: Dict[str, Any] = Field(..., description="Action to take in the environment")
-
-class StepResponse(BaseModel):
-    observation: Dict[str, Any]
-    reward: float
-    terminated: bool
-    truncated: bool
-    info: Dict[str, Any]
-
-@app.post("/reset", response_model=Dict[str, Any])
-async def reset(request: Optional[ResetRequest] = None):
-    seed = request.seed if request else None
+@app.post("/reset")
+async def reset(payload: Optional[Dict[str, Any]] = Body(None)):
+    """
+    Reset endpoint that accepts empty POST body, 
+    as required by the OpenEnv validator.
+    """
+    # Extract seed if present in payload, else None
+    seed = payload.get("seed") if payload else None
     obs, info = env.reset(seed=seed)
     return {"observation": obs, "info": info}
 
-@app.post("/step", response_model=StepResponse)
-async def step(request: StepRequest):
+@app.post("/step")
+async def step(action: Dict[str, Any]):
+    """
+    Step endpoint that accepts raw dict actions to avoid 
+    strict Pydantic validation failures during validation.
+    """
     try:
-        obs, reward, terminated, truncated, info = env.step(request.action)
-        return StepResponse(
-            observation=obs,
-            reward=reward,
-            terminated=terminated,
-            truncated=truncated,
-            info=info
-        )
+        obs, reward, terminated, truncated, info = env.step(action)
+        return {
+            "observation": obs,
+            "reward": float(reward),
+            "terminated": bool(terminated),
+            "truncated": bool(truncated),
+            "info": info
+        }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -50,7 +49,7 @@ async def get_state():
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "env": "EmailTriageEnv"}
+    return {"status": "healthy"}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=7860)
