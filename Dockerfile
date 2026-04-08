@@ -1,9 +1,5 @@
 FROM python:3.10-slim
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
-
 WORKDIR /app
 
 # Install system dependencies
@@ -15,11 +11,8 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy full project
+# Copy all project files to root of /app
 COPY . .
 
-# Ensure datasets and necessary files are present at root
-# These are already in the root based on the COPY . .
-
-# Run entrypoint
-CMD ["python", "inference.py"]
+# Launch inference automatically with default flags
+CMD ["python", "inference.py", "--difficulty", "easy", "--episodes", "1"]

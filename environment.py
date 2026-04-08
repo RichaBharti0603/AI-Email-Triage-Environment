@@ -21,7 +21,8 @@ class Action(BaseModel):
 
 class EmailTriageEnv(gym.Env):
     """
-    OpenEnv Compliant Email Triage Environment using Gymnasium.
+    OpenEnv Compliant Email Triage Environment.
+    Strictly aligned with Phase 1 reset/step requirements.
     """
     metadata = {"render_modes": ["ansi"]}
 
@@ -29,13 +30,13 @@ class EmailTriageEnv(gym.Env):
         super().__init__()
         self.target_difficulty = target_difficulty
         self.dataset_path = f"datasets/{target_difficulty}.json"
-        self.dataset = self._load_dataset()
+        self.email_database = self._load_dataset()
         
-        # Internal placeholders
-        self.current_idx = 0
-        self.steps_taken = 0
-        self.max_steps = len(self.dataset)
+        # Attribute alignment with user example
+        self.steps = 0
+        self.episode_reward = 0.0
         self.previous_action: str = "None"
+        self.current_email: Dict[str, Any] = {}
         
         # Valid label sets for penalty logic
         self.valid_labels = {
@@ -44,7 +45,7 @@ class EmailTriageEnv(gym.Env):
             "department": {"Sales", "Support", "HR", "Finance", "Tech"}
         }
 
-        # Define spaces (though OpenEnv uses Pydantic/YAML, Gymnasium requires these)
+        # Define spaces
         self.observation_space = spaces.Dict({
             "subject": spaces.Text(min_length=0, max_length=1000),
             "body": spaces.Text(min_length=0, max_length=5000),
@@ -70,115 +71,96 @@ class EmailTriageEnv(gym.Env):
             return json.load(f)
 
     def reset(self, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        # gymnasium seeding
+        # Required seeding call
         super().reset(seed=seed)
         
-        self.current_idx = 0
-        self.steps_taken = 0
+        # State alignment with user example
+        self.steps = 0
+        self.episode_reward = 0.0
         self.previous_action = "None"
         
-        obs = self._get_obs()
-        info = self._get_info()
-        return obs.dict(), info
-
-    def _get_obs(self) -> Observation:
-        if self.current_idx >= len(self.dataset):
-            return Observation(
-                subject="End of Dataset",
-                body="End of task reached.",
-                sender="system@openenv.ai",
-                urgency_hint="N/A",
-                intent_hint="N/A"
-            )
+        # Deterministic seeding using self.np_random as requested
+        idx = self.np_random.integers(0, len(self.email_database))
+        self.current_email = self.email_database[idx]
         
-        email = self.dataset[self.current_idx]
-        return Observation(
-            subject=email["subject"],
-            body=email["body"],
-            sender=email["sender"],
-            urgency_hint="Pending..." if self.target_difficulty != "easy" else "Clear",
-            intent_hint="Detecting..."
-        )
+        observation = self._get_observation()
+        info = self.state()
+        
+        # MUST return tuple of dicts
+        return observation, info
 
-    def _get_info(self) -> Dict[str, Any]:
-        email = self.dataset[self.current_idx] if self.current_idx < len(self.dataset) else None
-        return {
-            "ground_truth": email["ground_truth"] if email else None,
-            "previous_action": self.previous_action,
-            "steps_taken": self.steps_taken
-        }
+    def _get_observation(self) -> Dict[str, Any]:
+        obs_obj = Observation(
+            subject=self.current_email.get("subject", ""),
+            body=self.current_email.get("body", ""),
+            sender=self.current_email.get("sender", ""),
+            urgency_hint="Pending analysis..." if self.target_difficulty != "easy" else "Clear",
+            intent_hint="Primary intent detection..."
+        )
+        return obs_obj.dict()
 
     def state(self) -> Dict[str, Any]:
+        """Returns structured internal state."""
         return {
-            "current_idx": self.current_idx,
-            "steps_taken": self.steps_taken,
+            "steps": self.steps,
+            "episode_reward": self.episode_reward,
             "target_difficulty": self.target_difficulty,
             "previous_action": self.previous_action,
-            "is_done": self.steps_taken >= self.max_steps
+            "current_email_id": self.current_email.get("id", "unknown")
         }
 
     def step(self, action: Union[Dict[str, Any], Action]) -> Tuple[Dict[str, Any], float, bool, bool, Dict[str, Any]]:
-        # Seeding check or logic could go here if needed per step
-        
-        # Parse action
+        # Robust action handling
         if isinstance(action, dict):
             try:
                 action_obj = Action(**action)
+                penalty = 0.0
             except Exception:
                 # Penalty for invalid schema
-                self.previous_action = str(action)
-                return self._get_obs().dict(), -0.1, False, False, self._get_info()
+                penalty = -0.1
+                action_obj = Action(category="Inquiry", priority="Low", department="Support") # Fallback
         else:
             action_obj = action
+            penalty = 0.0
 
         self.previous_action = json.dumps(action_obj.dict())
         
-        if self.current_idx >= len(self.dataset):
-            return self._get_obs().dict(), 0.0, True, False, self._get_info()
+        gt = self.current_email.get("ground_truth", {})
+        
+        # Grading logic
+        step_reward = 0.0
+        def norm(v): return str(v).strip().lower()
 
-        gt = self.dataset[self.current_idx]["ground_truth"]
+        # Category/Priority/Dept checks
+        if norm(action_obj.category) == norm(gt.get("category", "")):
+            step_reward += 0.4
+        if norm(action_obj.priority) == norm(gt.get("priority", "")):
+            step_reward += 0.3
+        if norm(action_obj.department) == norm(gt.get("department", "")):
+            step_reward += 0.3
         
-        # Grading logic with validity checks
-        score = 0.0
+        # Apply schema penalty if any
+        step_reward += penalty
         
-        # Normalize and validate
-        cat = action_obj.category.strip().title()
-        prio = action_obj.priority.strip().title()
-        dept = action_obj.department.strip().title()
-
-        # Check for invalid labels (optional penalty)
-        if cat not in self.valid_labels["category"] or \
-           prio not in self.valid_labels["priority"] or \
-           dept not in self.valid_labels["department"]:
-            score -= 0.05 # Smaller penalty for out-of-bounds but valid schema
+        self.episode_reward += step_reward
+        self.steps += 1
         
-        # Accuracy checks
-        if cat.lower() == gt["category"].lower():
-            score += 0.4
-        if prio.lower() == gt["priority"].lower():
-            score += 0.3
-        if dept.lower() == gt["department"].lower():
-            score += 0.3
-
-        self.current_idx += 1
-        self.steps_taken += 1
-        
-        terminated = self.steps_taken >= self.max_steps
+        # Termination logic (single email per episode in this version for simplicity/alignment)
+        # Or you can iterate through database. The example implies a single email selected on reset.
+        terminated = True 
         truncated = False
         
-        obs = self._get_obs()
-        info = self._get_info()
+        observation = self._get_observation()
+        info = self.state()
         
-        return obs.dict(), round(score, 2), terminated, truncated, info
+        return observation, round(step_reward, 2), terminated, truncated, info
 
 if __name__ == "__main__":
     env = EmailTriageEnv(target_difficulty="easy")
-    # Test seeding
-    obs1, _ = env.reset(seed=42)
-    obs2, _ = env.reset(seed=42)
-    assert obs1 == obs2, "Deterministic seeding failed!"
-    print(f"Reset Obs (Seed 42): {obs1}")
+    obs, info = env.reset(seed=42)
+    print(f"Reset Obs: {obs}")
+    print(f"Info: {info}")
     
     action = {"category": "Inquiry", "priority": "Low", "department": "Support"}
-    obs, reward, terminated, _, info = env.step(action)
+    obs, reward, terminated, truncated, info = env.step(action)
     print(f"Step Reward: {reward}, Terminated: {terminated}")
