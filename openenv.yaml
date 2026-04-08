@@ -1,22 +1,26 @@
 name: email-triage-env
 version: 1.0.0
-description: A production-grade email triage environment for customer support workflows.
-entrypoint: environment.EmailTriageEnv
+description: "A hackathon-ready OpenEnv for automated email triage."
+entrypoint: "environment:EmailTriageEnv"
 observation_space:
-  subject: string
-  body: string
-  sender: string
-  urgency_hint: string
-  intent_hint: string
+  type: dict
+  properties:
+    subject: {type: string}
+    body: {type: string}
+    sender: {type: string}
+    urgency_hint: {type: string}
+    intent_hint: {type: string}
 action_space:
-  category: string
-  priority: string
-  department: string
+  type: dict
+  properties:
+    category: {type: string}
+    priority: {type: string}
+    department: {type: string}
 reward_range: [0.0, 1.0]
 tasks:
   - id: easy
-    description: Clear, single-intent emails.
+    target_difficulty: easy
   - id: medium
-    description: Ambiguous emails requiring multi-field reasoning.
+    target_difficulty: medium
   - id: hard
-    description: Multi-intent, noisy emails requiring deep reasoning.
+    target_difficulty: hard

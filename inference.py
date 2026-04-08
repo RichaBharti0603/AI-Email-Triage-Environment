@@ -1,84 +1,89 @@
 import os
 import json
 import time
-from typing import Dict, Any
+from typing import Dict, Any, List
 from environment import EmailTriageEnv, Action
 from graders import grade_task
 
-# Heuristic Agent Logic
-def heuristic_agent(observation) -> Action:
-    body = observation.body.lower()
-    subject = observation.subject.lower()
+# Heuristic Agent Logic (Fallback if OpenAI Key not provided or for baseline testing)
+def diagnostic_heuristic(observation: Dict[str, Any]) -> Action:
+    body = observation.get("body", "").lower()
+    subject = observation.get("subject", "").lower()
     
     # Default
     category = "Inquiry"
     priority = "Medium"
     department = "Support"
     
-    # Heuristics
-    if any(k in body for k in ["refund", "invoice", "price", "billing", "cost"]):
+    # Keyword analysis
+    if any(k in body for k in ["refund", "invoice", "price", "billing", "cost", "payment"]):
         department = "Finance"
-    elif any(k in body for k in ["error", "reset", "bug", "technical", "tech", "download", "portal"]):
+    elif any(k in body for k in ["error", "reset", "bug", "technical", "tech", "download", "login"]):
         department = "Tech"
-    elif any(k in body for k in ["buy", "order", "enterprise", "pro plan", "sales", "purchase"]):
+    elif any(k in body for k in ["buy", "order", "enterprise", "sales", "purchase", "demo"]):
         department = "Sales"
+    elif any(k in body for k in ["hiring", "job", "career", "resume", "interview"]):
+        department = "HR"
         
-    if any(k in body for k in ["urgent", "immediately", "asap", "fix this", "cancel"]):
+    if any(k in body for k in ["urgent", "immediately", "asap", "emergency", "broken"]):
         priority = "Urgent"
+    elif any(k in body for k in ["feature request", "suggestion"]):
+        priority = "Low"
+        
+    if any(k in body for k in ["cancel", "un happy", "disappoint", "frustrated", "worst"]):
         category = "Complaint"
-    elif any(k in body for k in ["spam", "winner", "free", "cruise"]):
+    elif any(k in body for k in ["spam", "winner", "free", "lottery", "prize", "congratulations"]):
         category = "Spam"
         priority = "Low"
         
     return Action(category=category, priority=priority, department=department)
 
-def run_evaluation(difficulty: str, num_episodes: int):
-    env = EmailTriageEnv(difficulty=difficulty)
+def run_evaluation(difficulty: str, num_episodes: int = 1):
+    env = EmailTriageEnv(target_difficulty=difficulty)
     
     print(f"[START]")
-    print(f"task: {difficulty}")
-    print(f"episodes: {num_episodes}")
+    print(f"Task: {difficulty}")
     
-    total_reward = 0.0
     total_score = 0.0
+    total_steps = 0
     
     for ep in range(1, num_episodes + 1):
-        obs = env.reset()
-        done = False
+        obs, info = env.reset()
+        terminated = False
+        truncated = False
         
-        while not done:
-            # Baseline Heuristic Agent
-            action = heuristic_agent(obs)
+        while not (terminated or truncated):
+            # Run heuristic agent
+            action = diagnostic_heuristic(obs)
             
             # Step environment
-            next_obs, reward, done, info = env.step(action)
+            next_obs, reward, terminated, truncated, info = env.step(action)
             
-            # Use deterministic grader for official score
-            score = grade_task(action.dict(), info["ground_truth"], difficulty)
+            # Official Grade
+            gt = info.get("ground_truth")
+            score = grade_task(action.dict(), gt, difficulty) if gt else 0.0
             
             print(f"[STEP]")
-            print(f"episode: {ep}")
-            print(f"action: {action.dict()}")
-            print(f"reward: {reward.value}")
-            print(f"score: {score}")
+            print(f"Episode: {ep}")
+            print(f"Action: {json.dumps(action.dict())}")
+            print(f"Reward: {reward}")
+            print(f"Score: {score}")
             
-            total_reward += reward.value
             total_score += score
+            total_steps += 1
             obs = next_obs
 
-    avg_reward = total_reward / num_episodes
-    avg_score = total_score / num_episodes
-    success_rate = 1.0 if avg_score > 0.7 else 0.0 # Example metric
+    avg_score = total_score / total_steps if total_steps > 0 else 0.0
     
     print(f"[END]")
-    print(f"avg_reward: {avg_reward}")
-    print(f"avg_score: {avg_score}")
-    print(f"success_rate: {success_rate}")
+    print(f"Average_Score: {round(avg_score, 2)}")
+    print(f"Success_Rate: {1.0 if avg_score > 0.7 else 0.0}")
     print("-" * 20)
-    
-    return avg_reward, avg_score
 
 if __name__ == "__main__":
     tasks = ["easy", "medium", "hard"]
     for task in tasks:
-        run_evaluation(task, 2) # Running 2 episodes per task for demo
+        try:
+            run_evaluation(task)
+        except Exception as e:
+            print(f"Error evaluating {task}: {e}")
