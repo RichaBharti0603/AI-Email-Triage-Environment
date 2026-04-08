@@ -9,7 +9,7 @@ def test_openenv_compliance():
     print("🔍 OPENENV COMPLIANCE VERIFICATION")
     print("=" * 70)
     
-    # 1. Check openenv.yaml
+    
     print("\n[1/5] Checking openenv.yaml...")
     if os.path.exists("openenv.yaml"):
         with open("openenv.yaml", 'r') as f:
