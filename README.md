@@ -1,192 +1,51 @@
-# 📧 AI Email Triage System (Production-Grade Evaluation Pipeline)
+# AI Email Triage Environment (OpenEnv)
 
-An end-to-end **AI-powered email classification and evaluation system** designed with **deterministic inference, structured grading, and reward-based feedback**.  
-Built to simulate real-world **AI agent evaluation environments** with reproducible benchmarking.
+A production-grade, Gymnasium-compatible reinforcement learning environment for automated email triage.
 
----
+## 🚀 Overview
 
-## 🚀 Live Demo
+The **EmailTriageEnv** simulates a real-world inbox session where an agent must classify incoming emails by **Category**, **Priority**, and **Department**.
 
-🔗 https://richab820-email-triage-ai.hf.space
+- **Compliance**: OpenEnv 1.0.0, Gymnasium 0.29.0
+- **Action Space**: Multi-objective (Dict)
+- **Observation Space**: Email content and previous context.
 
-> Fully deployed on Hugging Face Spaces with an interactive Gradio UI.
+## 🛠 Action Space
+| Field | Values |
+| :--- | :--- |
+| **Category** | Spam, Inquiry, Complaint, Request |
+| **Priority** | Low, Medium, High, Urgent |
+| **Department** | Sales, Support, HR, Finance, Tech |
 
----
+## 🎓 Task Difficulties
+1. **Easy**: Clear, single-intent emails. Evaluation focuses on Category/Priority.
+2. **Medium**: Ambiguous emails. Evaluation is balanced across all fields.
+3. **Hard**: Noisy, multi-intent, or deceptive emails. Evaluation prioritizes correct routing (Department).
 
-## 🧠 Problem Statement
+## 📊 Evaluation Logic
+The environment uses a multi-objective reward function normalized to `[0.0, 1.0]`. Partial correctness is supported via the `graders.py` module.
 
-Modern organizations receive thousands of emails daily across multiple departments.  
-Manual triaging is:
-- ❌ Time-consuming  
-- ❌ Error-prone  
-- ❌ Not scalable  
+## 🏃 Quick Start
 
-This system automates:
-- Email classification  
-- Priority assignment  
-- Department routing  
-
-While also providing a **quantifiable evaluation framework** for AI performance.
-
----
-
-## 🏗️ System Architecture
-User Input (Email)
-↓
-LLM / Zero-shot Classifier (DistilBART-MNLI)
-↓
-Structured Output (Category, Priority, Department)
-↓
-Parsing & Normalization Layer
-↓
-Evaluation Engine (Grader)
-↓
-Reward Function (Step-wise Feedback)
-↓
-Logging + Metrics + UI Display
-
-
----
-
-## ⚙️ Features
-
-### ✅ Intelligent Email Classification
-- Category: `Spam | Inquiry | Complaint | Request`
-- Priority: `Low | Medium | High | Urgent`
-- Department: `Sales | Support | HR | Finance | Tech`
-
----
-
-### ✅ Deterministic Inference
-- Fixed seeds (`random`, `numpy`, `torch`)
-- Zero-temperature inference
-- Reproducible outputs across runs
-
----
-
-### ✅ Multi-Level Task Evaluation
-
-| Task Level | Objective |
-|-----------|----------|
-| 🟢 Easy | Predict Category |
-| 🟡 Medium | Predict Category + Priority |
-| 🔴 Hard | Predict Category + Priority + Department |
-
----
-
-### ✅ Programmatic Graders (0.0 → 1.0)
-
-- Exact match scoring
-- Weighted evaluation:
-  - Easy → binary
-  - Medium → averaged
-  - Hard → full structured scoring
-
----
-
-### ✅ Reward Function (RL-style Feedback)
-
-Provides **step-wise rewards**, not just final output:
-
-- +0.3 → Correct Category  
-- +0.3 → Correct Priority  
-- +0.4 → Correct Department  
-
-Penalties:
-- ❌ Invalid JSON → -1.0  
-- ❌ Empty Output → -0.5  
-- ❌ Infinite loops → -0.2  
-
----
-
-### ✅ Robust Output Parsing
-
-- Regex-based JSON extraction
-- Safe parsing (`json.loads`)
-- Controlled normalization (Title Case mapping)
-- Fault-tolerant execution
-
----
-
-### ✅ Baseline Evaluation Pipeline
-
-- Deterministic script: `baseline_inference.py`
-- Fixed dataset slice
-- Reproducible benchmarking
-- Outputs:
-  - Average scores (Easy/Medium/Hard)
-  - Prediction vs Ground Truth comparison
-  - Saved results (`baseline_results.json`)
-
----
-
-### ✅ Observability & Logging
-
-- Structured logs for:
-  - Input
-  - Raw model output
-  - Parsed predictions
-  - Scores & reward
-- Debug-friendly and failure-resilient
-
----
-
-### ✅ Interactive UI (Gradio)
-
-- Real-time predictions
-- Displays:
-  - Category, Priority, Department
-  - Task scores (Easy/Medium/Hard)
-  - Reward signal
-- Sample test cases included
-
----
-
-## 📂 Project Structure
-
-├── app.py # Gradio UI
-├── environment.py # EmailTriageEnv (core environment)
-├── schemas.py # Label definitions
-├── grader.py # Task evaluators
-├── reward.py # Reward function logic
-├── baseline_inference.py # Deterministic evaluation script
-├── baseline_results.json # Benchmark outputs
-├── requirements.txt
-└── README.md
-
-
----
-
-## 🧪 Running Locally
-
-### 1. Clone the repo
+### Local Runs
 ```bash
-git clone https://github.com/your-username/email-triage-ai.git
-cd email-triage-ai
+# Run baseline evaluation
+python run_baseline.py --difficulty easy --episodes 20
+```
 
-2. Install dependencies
-pip install -r requirements.txt
-3. Run the app
-python app.py
-📊 Run Baseline Evaluation
-python baseline_inference.py
+### Docker Deployment
+```bash
+docker build -t email-triage .
+docker run email-triage
+```
 
-Output:
+### Hugging Face Spaces
+This project is pre-configured for Hugging Face Spaces. Simply upload the files and ensure `requirements.txt` is present.
 
-Console metrics
-baseline_results.json
-🔐 Environment Variables
-
-If using API-based inference:
-
-export HF_TOKEN=your_token_here
-
-👩‍💻 Author
-
-Richa Bharti
-Final Year Engineering Student
-
-⭐ If you like this project
-
-Give it a ⭐ on GitHub — it helps a lot!
-
+## 🧠 Training an Agent
+```python
+from environment import EmailTriageEnv
+env = EmailTriageEnv(config={'difficulty': 'medium', 'max_steps': 5})
+obs, info = env.reset()
+```
+Use standard RL libraries like Stable Baselines3 or RLlib to train on this environment.

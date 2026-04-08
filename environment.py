@@ -14,22 +14,18 @@ logger = logging.getLogger("EmailTriageEnv")
 
 class EmailTriageEnv(gym.Env):
     """
-    Production-grade Email Triage Environment.
-    Compliant with OpenEnv and Gymnasium specifications.
+    OpenEnv-compliant Email Triage Environment.
+    Supports Easy, Medium, and Hard task difficulties.
     """
     
     def __init__(self, config: Optional[Dict] = None):
         super().__init__()
         self.spec_name = "email-triage-env"
-        self.spec_version = "3.1.0"
+        self.spec_version = "1.0.0"
         
-        self.config = config or {
-            'categories': [e.value for e in Category],
-            'priorities': [e.value for e in Priority],
-            'departments': [e.value for e in Department],
-            'max_steps': 5,
-            'invalid_action_penalty': -0.5
-        }
+        self.config = config or {}
+        self.max_steps = self.config.get('max_steps', 5)
+        self.task_difficulty = self.config.get('difficulty', 'medium').lower()
         
         self.action_space = spaces.Dict({
             'category': spaces.Discrete(len(Category)),
@@ -43,39 +39,64 @@ class EmailTriageEnv(gym.Env):
         })
         
         self.reward_fn = MultiObjectiveReward()
-        self.email_database: List[Dict[str, str]] = self._get_default_dataset()
-        self.current_email: Optional[Dict[str, str]] = None
-        self.previous_action: str = "None"
-        self.steps: int = 0
-        self.max_steps: int = self.config['max_steps']
-        self.episode_reward: float = 0.0
+        self.email_database = self._get_full_dataset()
+        self.active_emails = self._filter_dataset()
+        
+        self.current_email = None
+        self.previous_action = "None"
+        self.steps = 0
+        self.episode_reward = 0.0
 
-    def _get_default_dataset(self) -> List[Dict[str, str]]:
+    def _get_full_dataset(self) -> List[Dict[str, str]]:
+        """Complete dataset categorized by difficulty."""
         return [
-            {'text': 'I want to buy 100 units of your pro plan.', 'category': 'Inquiry', 'priority': 'Medium', 'department': 'Sales'},
-            {'text': 'My server is melting down! Help!', 'category': 'Request', 'priority': 'Urgent', 'department': 'Tech'},
-            {'text': 'I am unhappy with the service last week.', 'category': 'Complaint', 'priority': 'High', 'department': 'Support'},
-            {'text': 'Win a free cruise by clicking here!', 'category': 'Spam', 'priority': 'Low', 'department': 'Sales'},
-            {'text': 'How do I change my billing address?', 'category': 'Inquiry', 'priority': 'Medium', 'department': 'Finance'},
-            {'text': 'Can you reset my password for the HR portal?', 'category': 'Request', 'priority': 'Medium', 'department': 'HR'},
-            {'text': 'I want to cancel my subscription immediately.', 'category': 'Complaint', 'priority': 'High', 'department': 'Finance'},
-            {'text': 'Great job on the new update, guys!', 'category': 'Inquiry', 'priority': 'Low', 'department': 'Tech'}
+            # EASY: Clear, single intent
+            {'text': 'I want to buy 100 units of your pro plan.', 'category': 'Inquiry', 'priority': 'Medium', 'department': 'Sales', 'difficulty': 'easy'},
+            {'text': 'My server is down! Help me fix it!', 'category': 'Request', 'priority': 'Urgent', 'department': 'Tech', 'difficulty': 'easy'},
+            
+            # MEDIUM: Slightly ambiguous
+            {'text': 'I am unhappy with the service last week and want a refund.', 'category': 'Complaint', 'priority': 'High', 'department': 'Support', 'difficulty': 'medium'},
+            {'text': 'How do I change my billing address in the HR portal?', 'category': 'Inquiry', 'priority': 'Medium', 'department': 'Finance', 'difficulty': 'medium'},
+            
+            # HARD: Noisy, multi-intent, or deceptive
+            {'text': 'Subject: WINNER! You have been selected for a free cruise. Please verify your billing details at our finance office.', 'category': 'Spam', 'priority': 'Low', 'department': 'Finance', 'difficulty': 'hard'},
+            {'text': 'RE: Invoice #001 - The tech support was great, but the billing department is overcharging me for the sales consultation.', 'category': 'Complaint', 'priority': 'Medium', 'department': 'Finance', 'difficulty': 'hard'}
         ]
 
+    def _filter_dataset(self) -> List[Dict[str, str]]:
+        """Filter data based on current task difficulty."""
+        filtered = [e for e in self.email_database if e['difficulty'] == self.task_difficulty]
+        if not filtered:
+            logger.warning(f"No emails found for difficulty '{self.task_difficulty}', using full dataset.")
+            return self.email_database
+        return filtered
+
     def load_dataset(self, path: str):
+        """Dynamic dataset loading from external file."""
         try:
             with open(path, 'r') as f:
-                self.email_database = json.load(f)
-            logger.info(f"Loaded dataset: {path}")
+                data = json.load(f)
+                self.email_database = data
+                self.active_emails = self._filter_dataset()
+            logger.info(f"Loaded {len(data)} emails from {path}")
         except Exception as e:
-            logger.error(f"Failed to load dataset: {e}")
+            logger.error(f"Dataset load failed: {e}")
+
+    def reset(self, seed: Optional[int] = None, options: Optional[Dict] = None):
+        super().reset(seed=seed)
+        idx = self.np_random.integers(0, len(self.active_emails))
+        self.current_email = self.active_emails[idx]
+        self.steps = 0
+        self.previous_action = "None"
+        self.episode_reward = 0.0
+        return self._get_observation(), self.state()
 
     def state(self) -> Dict[str, Any]:
         return {
             "email_text": self.current_email['text'] if self.current_email else "",
             "previous_action": self.previous_action,
             "current_step": self.steps,
-            "episode_reward": self.episode_reward
+            "difficulty": self.task_difficulty
         }
 
     def _get_observation(self) -> Dict[str, str]:
@@ -84,70 +105,36 @@ class EmailTriageEnv(gym.Env):
             previous_action=self.previous_action
         ).dict()
 
-    def render(self):
-        if self.current_email:
-            print(f"\n[Step {self.steps}] Text: {self.current_email['text'][:100]}")
-
-    def reset(self, seed: Optional[int] = None, options: Optional[Dict] = None):
-        super().reset(seed=seed)
-        idx = self.np_random.integers(0, len(self.email_database))
-        self.current_email = self.email_database[idx]
-        self.steps = 0
-        self.previous_action = "None"
-        self.episode_reward = 0.0
-        return self._get_observation(), self.state()
-
-    def _validate_action(self, action: Dict[str, Any]) -> bool:
-        return (action.get('category') in self.config['categories'] and
-                action.get('priority') in self.config['priorities'] and
-                action.get('department') in self.config['departments'])
-
     def step(self, action_input: Union[Dict, str, TriageAction]):
         format_penalty = 0.0
-        # 1. Pipeline: Robust Parsing
         if isinstance(action_input, str):
             action_dict, format_penalty = self.reward_fn.parse_and_normalize(action_input)
         elif isinstance(action_input, dict):
             action_dict = action_input
-        elif isinstance(action_input, TriageAction):
-            action_dict = action_input.dict()
         else:
             action_dict = {}
-            format_penalty = self.config['invalid_action_penalty']
+            format_penalty = -0.5
 
-        # 2. Pipeline: Validation & Reward
-        valid_action = self._validate_action(action_dict)
-        if valid_action:
-            reward, breakdown = self.reward_fn.calculate(action_dict, self.current_email, format_penalty=format_penalty)
-        else:
-            reward = self.config['invalid_action_penalty']
-            breakdown = {"invalid_action": reward}
-
-        # 3. Pipeline: State Context Capture (BEFORE updating current_email)
-        ground_truth_handled = self.current_email.copy() if self.current_email else {}
+        # Check validity manually vs config if needed
+        reward, breakdown = self.reward_fn.calculate(action_dict, self.current_email, format_penalty=format_penalty)
         
-        # 4. Pipeline: Update State
+        gt_copy = self.current_email.copy()
         self.steps += 1
         self.previous_action = str(action_dict.get('category', 'None'))
         self.episode_reward += reward
         terminated = self.steps >= self.max_steps
         
-        # 5. Pipeline: Transition (Sample next email ONLY if not terminated)
         if not terminated:
-            idx = self.np_random.integers(0, len(self.email_database))
-            self.current_email = self.email_database[idx]
+            idx = self.np_random.integers(0, len(self.active_emails))
+            self.current_email = self.active_emails[idx]
         
-        # 6. Pipeline: Building Returns
-        observation = self._get_observation()
         info = {
-            'ground_truth': ground_truth_handled,
+            'ground_truth': gt_copy,
             'predicted': action_dict,
             'reward_breakdown': breakdown,
-            'valid_action': valid_action,
-            'step_number': self.steps,
-            'episode_reward': self.episode_reward,
+            'step': self.steps,
+            'difficulty': self.task_difficulty,
             'env_spec': f"{self.spec_name}-v{self.spec_version}"
         }
         
-        logger.info(f"Step {self.steps}: Reward {reward}")
-        return observation, reward, terminated, False, info
+        return self._get_observation(), reward, terminated, False, info

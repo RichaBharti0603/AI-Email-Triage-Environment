@@ -1,41 +1,36 @@
 name: email-triage-env
 version: 1.0.0
-
-description: AI-powered email triage RL environment
-
-author: Richa Bharti
-
-tags:
-  - openenv
-  - reinforcement-learning
-  - nlp
+description: Real-world email triage RL environment for multi-objective classification.
+author: AI Triage Team
+license: MIT
 
 observation_space:
-  type: object
-  properties:
-    email_text:
-      type: string
-    previous_action:
-      type: string
-      nullable: true
+  email_text: 
+    type: string
+    description: Raw content of the email.
+  previous_action: 
+    type: string
+    description: The category assigned to the previous email (or "None").
 
 action_space:
-  type: object
-  properties:
-    category:
-      type: string
-      enum: [Urgent, Normal, Spam]
-    priority:
-      type: string
-      enum: [High, Medium, Low]
-    department:
-      type: string
-      enum: [Tech, HR, Sales, Billing]
+  category: 
+    type: string
+    description: Classification (Spam, Inquiry, Complaint, Request).
+  priority: 
+    type: string
+    description: Priority level (Low, Medium, High, Urgent).
+  department: 
+    type: string
+    description: Target department (Sales, Support, HR, Finance, Tech).
 
-reward:
-  type: number
-  minimum: 0.0
-  maximum: 1.0
+reward_range: [0.0, 1.0]
 
-episode:
-  max_steps: 1
+tasks:
+  - id: easy
+    description: Direct emails with minimal ambiguity.
+  - id: medium
+    description: Emails requiring basic reasoning and intent detection.
+  - id: hard
+    description: Noisy, multi-intent, or deceptive (spam-like) emails.
+
+env_class: environment.EmailTriageEnv
