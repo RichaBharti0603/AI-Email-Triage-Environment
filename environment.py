@@ -1,21 +1,38 @@
 import random
+import logging
+import numpy as np
+import torch
 from typing import Dict, Any, Optional, Union
 import gymnasium as gym
 from gymnasium import spaces
-import numpy as np
 
 from reward import MultiObjectiveReward
 from schemas import Category, Priority, Department, EmailObservation, TriageAction
 
+# Configure Logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger("EmailTriageEnv")
+
 class EmailTriageEnv(gym.Env):
-    """Modular Email Triage Environment using external Reward Function"""
+    """
+    Production-grade Email Triage Environment.
+    Features strict determinism, robust parsing, and observability.
+    """
     
     def __init__(self, config: Optional[Dict] = None):
         super().__init__()
         
+        # 1. Determinism & Reproducibility
+        random.seed(42)
+        np.random.seed(42)
+        torch.manual_seed(42)
+        
         # OpenEnv Metadata
         self.spec_name = "email-triage-env"
-        self.spec_version = "1.0.0"
+        self.spec_version = "2.0.0"
         
         # Configuration
         self.config = config or {
@@ -24,18 +41,17 @@ class EmailTriageEnv(gym.Env):
             'departments': [e.value for e in Department]
         }
         
-        # Action space: Mapped from TriageAction schema
-        # We also support legacy int actions (0=Urgent, 1=Normal, 2=Spam)
+        # Action space
         self.action_space = spaces.Dict({
             'category': spaces.Discrete(len(Category)),
             'priority': spaces.Discrete(len(Priority)),
             'department': spaces.Discrete(len(Department))
         })
         
-        # Observation space: matching openenv.yaml
+        # Observation space
         self.observation_space = spaces.Dict({
             'email_text': spaces.Text(max_length=1000),
-            'previous_action': spaces.Text(max_length=50) # Nullable in spec
+            'previous_action': spaces.Text(max_length=50)
         })
         
         # Reward Function
@@ -45,105 +61,73 @@ class EmailTriageEnv(gym.Env):
         self.current_email = None
         self.previous_action = None
         self.steps = 0
-        self.max_steps = 1 # Single-step episodes as per OpenEnv spec
+        self.max_steps = 1
         
-        # Email database
-        self.email_database = self._create_email_database()
-        
-    def _create_email_database(self):
-        """Create email database with standardized labels"""
-        return [
-            {
-                'text': 'URGENT: Server down! Need immediate assistance.',
-                'category': 'Urgent', 'priority': 'High', 'department': 'Tech'
-            },
-            {
-                'text': 'Team meeting at 3 PM tomorrow. Please confirm attendance.',
-                'category': 'Normal', 'priority': 'Medium', 'department': 'HR'
-            },
-            {
-                'text': 'WIN $1000 FREE!!! Claim your prize now! Click here!',
-                'category': 'Spam', 'priority': 'Low', 'department': 'Sales'
-            },
-            {
-                'text': 'Project deadline extended to Friday. Great news!',
-                'category': 'Normal', 'priority': 'Medium', 'department': 'Tech'
-            },
-            {
-                'text': 'CRITICAL: Security breach detected! Immediate action required!',
-                'category': 'Urgent', 'priority': 'High', 'department': 'Tech'
-            },
-            {
-                'text': 'Buy cheap watches online! 70% off!!! Limited time offer!',
-                'category': 'Spam', 'priority': 'Low', 'department': 'Sales'
-            },
-            {
-                'text': 'Weekly report for review. Please check the attached file.',
-                'category': 'Normal', 'priority': 'Medium', 'department': 'Billing'
-            },
-            {
-                'text': 'EMERGENCY: Database corrupted! Immediate action required!',
-                'category': 'Urgent', 'priority': 'High', 'department': 'Tech'
-            }
+        # 2. Dataset Setup (Updated Labels)
+        self.email_database = [
+            {'text': 'I want to buy 100 units of your pro plan.', 'category': 'Inquiry', 'priority': 'Medium', 'department': 'Sales'},
+            {'text': 'My server is melting down! Help!', 'category': 'Request', 'priority': 'Urgent', 'department': 'Tech'},
+            {'text': 'I am unhappy with the service last week.', 'category': 'Complaint', 'priority': 'High', 'department': 'Support'},
+            {'text': 'Win a free cruise by clicking here!', 'category': 'Spam', 'priority': 'Low', 'department': 'Sales'},
+            {'text': 'How do I change my billing address?', 'category': 'Inquiry', 'priority': 'Medium', 'department': 'Finance'},
+            {'text': 'Can you reset my password for the HR portal?', 'category': 'Request', 'priority': 'Medium', 'department': 'HR'},
+            {'text': 'I want to cancel my subscription immediately.', 'category': 'Complaint', 'priority': 'High', 'department': 'Finance'},
+            {'text': 'Great job on the new update, guys!', 'category': 'Inquiry', 'priority': 'Low', 'department': 'Tech'}
         ]
-    
-    def _extract_features(self, email):
-        """Extract features matching EmailObservation schema"""
-        if email is None:
-            return None
-        return EmailObservation(
-            email_text=email['text'],
-            previous_action=self.previous_action
-        ).dict()
-    
-    def reset(self, seed=None, options=None):
-        """Reset the environment for a new single-step episode"""
-        super().reset(seed=seed)
         
-        # Pick a random email for the new episode
+    def reset(self, seed=None, options=None):
+        """Reset the environment for a new episode"""
+        super().reset(seed=seed)
+        if seed is not None:
+             random.seed(seed)
+             np.random.seed(seed)
+             torch.manual_seed(seed)
+             
         self.current_email = random.choice(self.email_database)
         self.steps = 0
         
-        # We persist previous_action across episodes but it's None for new runs
-        observation = self._extract_features(self.current_email)
+        observation = EmailObservation(
+            email_text=self.current_email['text'],
+            previous_action=self.previous_action
+        ).dict()
+        
+        logger.info(f"Environment reset. New Email: {self.current_email['text'][:50]}...")
         return observation, {'step': 0}
     
-    def step(self, action: Union[Dict, int, TriageAction]):
-        """Execute one step with backward compatibility for legacy agents"""
+    def step(self, action_input: Union[Dict, str, TriageAction]):
+        """Execute one step with robust parsing and logging."""
         
-        # 1. Handle Backward Compatibility for Legacy Agents
-        if isinstance(action, int):
-            # Map legacy discrete action to full TriageAction
-            cat_list = [e.value for e in Category]
-            category_val = cat_list[action] if action < len(cat_list) else Category.NORMAL.value
-            action_dict = {
-                'category': category_val,
-                'priority': Priority.LOW.value,
-                'department': Department.HR.value
-            }
-        elif isinstance(action, TriageAction):
-            action_dict = action.dict()
+        # 3. Robust Parsing
+        if isinstance(action_input, str):
+            # If raw string (e.g. from LLM), parse it
+            action_dict, format_penalty = self.reward_fn.parse_and_normalize(action_input)
+        elif isinstance(action_input, dict):
+            action_dict = action_input
+            format_penalty = 0.0
+        elif isinstance(action_input, TriageAction):
+            action_dict = action_input.dict()
+            format_penalty = 0.0
         else:
-            action_dict = action
-
-        # 2. Process Step
-        reward, reward_breakdown = self.reward_fn.calculate(action_dict, self.current_email)
-        self.steps += 1
-        done = True # Enforce single-step
+            action_dict = {}
+            format_penalty = -1.0
+            
+        # 4. Reward Calculation
+        # For simplicity, we assume no repeat penalty in this single-step env
+        reward, breakdown = self.reward_fn.calculate(
+            action_dict, self.current_email, format_penalty=format_penalty
+        )
         
-        # Update persistent state
+        self.steps += 1
+        done = True
         self.previous_action = action_dict.get('category')
         
         info = {
-            'ground_truth': {
-                'category': self.current_email['category'],
-                'priority': self.current_email['priority'],
-                'department': self.current_email['department']
-            },
+            'ground_truth': self.current_email,
             'predicted': action_dict,
-            'reward': reward,
-            'reward_breakdown': reward_breakdown,
-            'is_correct': str(action_dict.get('category')).lower() == str(self.current_email['category']).lower()
+            'reward_breakdown': breakdown,
+            'step': self.steps
         }
+        
+        logger.info(f"Step {self.steps}: Reward={reward}, Predicted={action_dict}")
         
         return None, reward, done, False, info

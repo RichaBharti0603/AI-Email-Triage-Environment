@@ -3,6 +3,7 @@ from tasks import easy, medium, hard
 def evaluate(pred_action: dict, truth: dict) -> dict:
     """
     Evaluates a prediction against ground truth for all tasks.
+    Ensures consistent Title Case comparison via internal graders.
     
     Args:
         pred_action (dict): The action predicted by the agent.

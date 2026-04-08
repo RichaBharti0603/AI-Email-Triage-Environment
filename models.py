@@ -1,4 +1,5 @@
 from schemas import Category, Priority, Department, TriageAction
+from transformers import pipeline
 
 # Centralized Labels for Consistency with OpenEnv
 LABELS = {
@@ -34,7 +35,7 @@ class TriageModel:
         """Predict all three objectives for a given email text"""
         if not text or not text.strip():
             return TriageAction(
-                category=Category.NORMAL,
+                category=Category.INQUIRY,
                 priority=Priority.LOW,
                 department=Department.HR
             )

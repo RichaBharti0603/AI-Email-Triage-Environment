@@ -3,20 +3,23 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 class Category(str, Enum):
-    URGENT = "Urgent"
-    NORMAL = "Normal"
     SPAM = "Spam"
+    INQUIRY = "Inquiry"
+    COMPLAINT = "Complaint"
+    REQUEST = "Request"
 
 class Priority(str, Enum):
-    HIGH = "High"
-    MEDIUM = "Medium"
     LOW = "Low"
+    MEDIUM = "Medium"
+    HIGH = "High"
+    URGENT = "Urgent"
 
 class Department(str, Enum):
-    TECH = "Tech"
-    HR = "HR"
     SALES = "Sales"
-    BILLING = "Billing"
+    SUPPORT = "Support"
+    HR = "HR"
+    FINANCE = "Finance"
+    TECH = "Tech"
 
 class EmailObservation(BaseModel):
     """Observation space for the email triage environment"""
